@@ -5,38 +5,32 @@ import store.model.Promotion;
 import store.util.MarkdownReader;
 
 import java.util.List;
+import java.util.function.Function;
 import java.util.stream.Collectors;
 
 public class StockSituationService {
     private final MarkdownReader reader = new MarkdownReader();
 
-    public List<Product> loadProducts(String filename) {
-        List<String[]> rawData = reader.readMarkdownFile(filename);
+    private <T> List<T> loadEntities(String filename, String expectedHeader, Function<String[], T> mapper) {
+        List<String[]> rawData = reader.readMarkdownFile(filename, expectedHeader);
         return rawData.stream()
                 .map(data -> {
                     try {
-                        return new Product(data);
+                        return mapper.apply(data);
                     } catch (IllegalArgumentException e) {
                         System.out.println(e.getMessage());
                         return null;
                     }
                 })
-                .filter(product -> product != null)
+                .filter(entity -> entity != null)
                 .collect(Collectors.toList());
     }
 
+    public List<Product> loadProducts(String filename) {
+        return loadEntities(filename, "name,price,quantity,promotion", Product::new);
+    }
+
     public List<Promotion> loadPromotions(String filename) {
-        List<String[]> rawData = reader.readMarkdownFile(filename);
-        return rawData.stream()
-                .map(data -> {
-                    try {
-                        return new Promotion(data);
-                    } catch (IllegalArgumentException e) {
-                        System.out.println(e.getMessage());
-                        return null;
-                    }
-                })
-                .filter(promotion -> promotion != null)
-                .collect(Collectors.toList());
+        return loadEntities(filename, "name,buy,get,start_date,end_date", Promotion::new);
     }
 }

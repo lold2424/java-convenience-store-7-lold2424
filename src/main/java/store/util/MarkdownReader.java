@@ -7,22 +7,30 @@ import java.util.List;
 
 public class MarkdownReader {
 
-    public List<String[]> readMarkdownFile(String filename) {
-        List<String[]> data = new ArrayList<>();
-        try (BufferedReader br = new BufferedReader(new InputStreamReader(
+    public List<String[]> readMarkdownFile(String filename, String expectedHeader) {
+        try (BufferedReader reader = new BufferedReader(new InputStreamReader(
                 getClass().getClassLoader().getResourceAsStream(filename)))) {
 
-            if (br == null) {
-                throw new IllegalStateException("[ERROR] File not found: " + filename);
-            }
+            if (reader == null) throw new IllegalStateException("[ERROR] 파일을 찾을 수 없습니다.: " + filename);
+            validateHeader(reader.readLine(), expectedHeader, filename);
+            return readLines(reader);
 
-            br.readLine(); // 첫 줄(헤더) 건너뛰기
-            String line;
-            while ((line = br.readLine()) != null) {
-                data.add(line.split(","));
-            }
         } catch (java.io.IOException e) {
-            throw new IllegalStateException("[ERROR] Could not read file: " + filename);
+            throw new IllegalStateException("[ERROR] 파일을 읽을 수 없습니다.: " + filename, e);
+        }
+    }
+
+    private void validateHeader(String header, String expectedHeader, String filename) {
+        if (header == null || !header.trim().equals(expectedHeader)) {
+            throw new IllegalArgumentException("[ERROR] 파일의 header가 없습니다. " + filename + ": " + header);
+        }
+    }
+
+    private List<String[]> readLines(BufferedReader reader) throws java.io.IOException {
+        List<String[]> data = new ArrayList<>();
+        String line;
+        while ((line = reader.readLine()) != null) {
+            data.add(line.split(","));
         }
         return data;
     }

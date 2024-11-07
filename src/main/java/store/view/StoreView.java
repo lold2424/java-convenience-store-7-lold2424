@@ -1,12 +1,13 @@
 package store.view;
 
+import store.message.IOMessage;
 import store.model.Product;
 
 import java.util.List;
 
 public class StoreView {
     public void displayProducts(List<Product> products) {
-        System.out.println("Loaded Products:");
+        System.out.println(IOMessage.START_MESSAGE.getMessage());
         products.forEach(System.out::println);
     }
 
