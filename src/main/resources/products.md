@@ -15,3 +15,4 @@ name,price,quantity,promotion
 정식도시락,6400,8,null
 컵라면,1700,1,MD추천상품
 컵라면,1700,10,null
+박상운,10000,ㅁ,뭐야
