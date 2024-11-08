@@ -1,7 +1,7 @@
 package store.view;
 
 import store.message.IOMessage;
-import store.model.Product;
+import store.domain.product.Product;
 
 import java.util.List;
 
@@ -15,4 +15,3 @@ public class StoreView {
         System.out.println(errorMessage);
     }
 }
-

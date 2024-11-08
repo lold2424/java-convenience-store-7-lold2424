@@ -1,4 +1,4 @@
-package store.model;
+package store.domain.product;
 
 import java.text.NumberFormat;
 import java.util.Locale;

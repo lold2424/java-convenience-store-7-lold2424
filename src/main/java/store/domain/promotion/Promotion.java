@@ -1,4 +1,4 @@
-package store.model;
+package store.domain.promotion;
 
 public class Promotion {
     private String name;
