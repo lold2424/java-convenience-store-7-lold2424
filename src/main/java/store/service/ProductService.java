@@ -57,7 +57,6 @@ public class ProductService {
         return productGroup.stream().anyMatch(p -> p.getPromotion() == null);
     }
 
-    // Updated method: Set stock to zero for non-promotional products created when no non-promotional stock exists
     private Product createNonPromotionalProduct(String name, Product lastProduct) {
         return new Product(name, lastProduct.getPrice(), 0, null);
     }
@@ -77,7 +76,7 @@ public class ProductService {
         }
     }
 
-    private void validateHeader(String headerLine, String expectedHeader, String filename) {
+    void validateHeader(String headerLine, String expectedHeader, String filename) {
         if (headerLine == null || !headerLine.trim().equals(expectedHeader)) {
             throw new IllegalArgumentException(ErrorMessage.INVALID_FILE_HEADER.getMessage() + filename);
         }

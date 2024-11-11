@@ -98,15 +98,12 @@ public class PurchaseService {
         Product product = matchedProducts.get(0);
         Promotion promotion = promotions.get(product.getPromotion());
 
-        // Check if promotion is active
         boolean isPromotionActive = promotion != null && promotion.isActive();
 
         if (!isPromotionActive) {
-            // If promotion is not active, treat as non-promotional
             setNonPromotionalRequest(request, product, requestedQuantity);
             tempRequests.add(request);
         } else {
-            // Promotion is active, proceed as before
             int promoStock = product.getPromotionStock();
             int nonPromoStock = totalStock - promoStock;
             processPromotionAndAddRequests(tempRequests, request, promoStock, nonPromoStock, product, promotion);
