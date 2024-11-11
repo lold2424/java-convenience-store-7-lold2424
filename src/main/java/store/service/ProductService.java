@@ -56,8 +56,9 @@ public class ProductService {
         return productGroup.stream().anyMatch(p -> p.getPromotion() == null);
     }
 
+    // Updated method: Set stock to zero for non-promotional products created when no non-promotional stock exists
     private Product createNonPromotionalProduct(String name, Product lastProduct) {
-        return new Product(name, lastProduct.getPrice(), lastProduct.getStock(), null);
+        return new Product(name, lastProduct.getPrice(), 0, null);
     }
 
     private List<String[]> readMarkdownFile(String filename, String expectedHeader) {
