@@ -1,13 +1,24 @@
 package store.service;
 
 import store.domain.Promotion;
+import store.util.DateProvider;
 
 import java.io.BufferedReader;
 import java.io.IOException;
 import java.io.InputStreamReader;
-import java.util.*;
+import java.time.LocalDate;
+import java.time.format.DateTimeFormatter;
+import java.util.ArrayList;
+import java.util.HashMap;
+import java.util.List;
+import java.util.Map;
 
 public class PromotionService {
+    private final DateProvider dateProvider;
+
+    public PromotionService(DateProvider dateProvider) {
+        this.dateProvider = dateProvider;
+    }
 
     public Map<String, Promotion> initializePromotions() {
         String promotionsFilePath = "promotions.md";
@@ -30,8 +41,10 @@ public class PromotionService {
         String name = parts[0];
         int buy = Integer.parseInt(parts[1]);
         int get = Integer.parseInt(parts[2]);
-        // Ignore start_date and end_date for now
-        return new Promotion(name, buy, get);
+        DateTimeFormatter formatter = DateTimeFormatter.ofPattern("yyyy-MM-dd");
+        LocalDate startDate = LocalDate.parse(parts[3], formatter);
+        LocalDate endDate = LocalDate.parse(parts[4], formatter);
+        return new Promotion(name, buy, get, startDate, endDate, dateProvider);
     }
 
     private List<String[]> readMarkdownFile(String filename, String expectedHeader) {

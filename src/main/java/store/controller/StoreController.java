@@ -5,6 +5,8 @@ import store.domain.Promotion;
 import store.service.ProductService;
 import store.service.PromotionService;
 import store.service.PurchaseService;
+import store.util.DateProvider;
+import store.util.SystemDateProvider;
 import store.view.View;
 
 import java.util.List;
@@ -14,7 +16,8 @@ public class StoreController {
 
     public static void main(String[] args) {
         View view = new View();
-        PromotionService promotionService = new PromotionService();
+        DateProvider dateProvider = new SystemDateProvider();
+        PromotionService promotionService = new PromotionService(dateProvider);
         Map<String, Promotion> promotions = promotionService.initializePromotions();
 
         ProductService productService = new ProductService();

@@ -91,16 +91,21 @@ public class PurchaseService {
         int totalStock = getTotalStock(matchedProducts);
 
         if (requestedQuantity > totalStock) {
-            throw new IllegalArgumentException("[ERROR] 재고 수량을 초과하여 구매할 수 없습니다. 다시 입력해 주세요.");
+            throw new IllegalArgumentException("[ERROR] 입력한 수량(" + requestedQuantity + "개)이 총 재고(" + totalStock + "개)를 초과합니다. 구매 가능한 최대 수량은 " + totalStock + "개입니다.");
         }
 
         Product product = matchedProducts.get(0);
         Promotion promotion = promotions.get(product.getPromotion());
 
-        if (promotion == null) {
+        // Check if promotion is active
+        boolean isPromotionActive = promotion != null && promotion.isActive();
+
+        if (!isPromotionActive) {
+            // If promotion is not active, treat as non-promotional
             setNonPromotionalRequest(request, product, requestedQuantity);
             tempRequests.add(request);
         } else {
+            // Promotion is active, proceed as before
             int promoStock = product.getPromotionStock();
             int nonPromoStock = totalStock - promoStock;
             processPromotionAndAddRequests(tempRequests, request, promoStock, nonPromoStock, product, promotion);
@@ -303,4 +308,6 @@ public class PurchaseService {
         }
         System.out.println("내실돈\t\t\t " + numberFormat.format(finalAmount));
     }
+
+
 }
