@@ -17,12 +17,8 @@ public class Application {
         boolean shopping = true;
         while (shopping) {
             displayProducts(products);
-            try {
-                processPurchase(products, promotions);
-                shopping = askForMoreShopping();
-            } catch (IllegalArgumentException e) {
-                System.out.println(e.getMessage());
-            }
+            processPurchase(products, promotions);
+            shopping = askForMoreShopping();
         }
     }
 
@@ -31,36 +27,44 @@ public class Application {
         String expectedHeader = "name,price,quantity,promotion";
 
         List<String[]> productData = readMarkdownFile(productsFilePath, expectedHeader);
-        Map<String, List<Product>> groupedProducts = new LinkedHashMap<>();
+        Map<String, List<Product>> groupedProducts = parseAndGroupProducts(productData);
 
-        // Load all products into a grouped map
-        for (String[] parts : productData) {
-            String name = parts[0];
-            int price = Integer.parseInt(parts[1]);
-            int stock = Integer.parseInt(parts[2]);
-            String promotion = parts.length > 3 && !parts[3].equalsIgnoreCase("null") ? parts[3] : null;
-
-            Product product = new Product(name, price, stock, promotion);
-            groupedProducts.computeIfAbsent(name, k -> new ArrayList<>()).add(product);
-        }
-
-        // Create the final sorted list
         for (Map.Entry<String, List<Product>> entry : groupedProducts.entrySet()) {
             String name = entry.getKey();
             List<Product> productGroup = entry.getValue();
 
-            // Add all existing products
             products.addAll(productGroup);
 
-            // Check if non-promotional product exists
-            boolean hasNonPromotional = productGroup.stream().anyMatch(p -> p.getPromotion() == null);
-            if (!hasNonPromotional) {
-                // Add a non-promotional product with stock
+            if (!hasNonPromotionalProduct(productGroup)) {
                 Product lastProduct = productGroup.get(0);
-                Product nonPromoProduct = new Product(name, lastProduct.getPrice(), lastProduct.getStock(), null);
-                products.add(nonPromoProduct);
+                products.add(createNonPromotionalProduct(name, lastProduct));
             }
         }
+    }
+
+    private static Map<String, List<Product>> parseAndGroupProducts(List<String[]> productData) {
+        Map<String, List<Product>> groupedProducts = new LinkedHashMap<>();
+        for (String[] parts : productData) {
+            Product product = parseProduct(parts);
+            groupedProducts.computeIfAbsent(product.getName(), k -> new ArrayList<>()).add(product);
+        }
+        return groupedProducts;
+    }
+
+    private static Product parseProduct(String[] parts) {
+        String name = parts[0];
+        int price = Integer.parseInt(parts[1]);
+        int stock = Integer.parseInt(parts[2]);
+        String promotion = (parts.length > 3 && !parts[3].equalsIgnoreCase("null")) ? parts[3] : null;
+        return new Product(name, price, stock, promotion);
+    }
+
+    private static boolean hasNonPromotionalProduct(List<Product> productGroup) {
+        return productGroup.stream().anyMatch(p -> p.getPromotion() == null);
+    }
+
+    private static Product createNonPromotionalProduct(String name, Product lastProduct) {
+        return new Product(name, lastProduct.getPrice(), lastProduct.getStock(), null);
     }
 
     public static Map<String, Promotion> initializePromotions() {
@@ -68,32 +72,43 @@ public class Application {
         String expectedHeader = "name,buy,get,start_date,end_date";
 
         List<String[]> promotionData = readMarkdownFile(promotionsFilePath, expectedHeader);
+        return parsePromotionData(promotionData);
+    }
+
+    private static Map<String, Promotion> parsePromotionData(List<String[]> promotionData) {
         Map<String, Promotion> promotions = new HashMap<>();
         for (String[] parts : promotionData) {
-            String name = parts[0];
-            int buy = Integer.parseInt(parts[1]);
-            int get = Integer.parseInt(parts[2]);
-            promotions.put(name, new Promotion(name, buy, get));
+            Promotion promotion = parsePromotion(parts);
+            promotions.put(promotion.getName(), promotion);
         }
         return promotions;
+    }
+
+    private static Promotion parsePromotion(String[] parts) {
+        String name = parts[0];
+        int buy = Integer.parseInt(parts[1]);
+        int get = Integer.parseInt(parts[2]);
+        return new Promotion(name, buy, get);
     }
 
     public static List<String[]> readMarkdownFile(String filename, String expectedHeader) {
         try (BufferedReader reader = new BufferedReader(new InputStreamReader(
                 Application.class.getClassLoader().getResourceAsStream(filename)))) {
 
-            if (reader == null) throw new IllegalStateException("[ERROR] 파일을 찾을 수 없습니다.: " + filename);
+            if (reader == null) {
+                throw new IllegalArgumentException("[ERROR] 파일을 찾을 수 없습니다.: " + filename);
+            }
             validateHeader(reader.readLine(), expectedHeader, filename);
             return readLines(reader);
 
         } catch (IOException e) {
-            throw new IllegalStateException("[ERROR] 파일을 읽을 수 없습니다.: " + filename, e);
+            throw new IllegalArgumentException("[ERROR] 파일을 읽을 수 없습니다.: " + filename);
         }
     }
 
     public static void validateHeader(String headerLine, String expectedHeader, String filename) {
         if (headerLine == null || !headerLine.trim().equals(expectedHeader)) {
-            throw new IllegalStateException("[ERROR] 파일 헤더가 예상과 다릅니다. 파일명: " + filename);
+            throw new IllegalArgumentException("[ERROR] 파일 헤더가 예상과 다릅니다. 파일명: " + filename);
         }
     }
 
@@ -114,92 +129,88 @@ public class Application {
     }
 
     public static void processPurchase(List<Product> products, Map<String, Promotion> promotions) {
-        List<PurchaseRequest> purchaseRequests = new ArrayList<>(); // 각 거래마다 새로운 리스트 생성
-        while (true) {
-            System.out.println("구매하실 상품명과 수량을 입력해 주세요. (예: [사이다-2],[감자칩-1])");
-            String items = Console.readLine();
-            String[] itemList = items.split(",");
-
-            boolean allValid = true;
-            List<PurchaseRequest> tempRequests = new ArrayList<>();
-
-            for (String item : itemList) {
-                PurchaseRequest request;
-                try {
-                    request = parsePurchaseItem(item);
-                } catch (IllegalArgumentException e) {
-                    System.out.println("[ERROR] 잘못된 입력 형식입니다. 다시 입력해 주세요.");
-                    allValid = false;
-                    break;
-                }
-
-                List<Product> matchedProducts = findProductsByName(products, request.getProductName());
-                if (matchedProducts.isEmpty()) {
-                    System.out.println("[ERROR] 해당 상품을 찾을 수 없습니다: " + request.getProductName());
-                    allValid = false;
-                    break;
-                }
-
-                int requestedQuantity = request.getQuantity();
-
-                // Get total stock
-                int totalStock = matchedProducts.stream().mapToInt(Product::getStock).sum();
-                if (requestedQuantity > totalStock) {
-                    System.out.println("[ERROR] 입력한 수량(" + requestedQuantity + "개)이 총 재고(" + totalStock + "개)를 초과합니다. 구매 가능한 최대 수량은 " + totalStock + "개입니다.");
-                    allValid = false;
-                    break;
-                }
-
-                // Check promotion applicability
-                Product product = matchedProducts.get(0);
-                Promotion promotion = promotions.get(product.getPromotion());
-
-                if (promotion != null) {
-                    // Product has promotion
-                    int promoStock = product.getPromotionStock();
-                    int nonPromoStock = totalStock - promoStock;
-
-                    boolean proceed = processPromotionAndAddRequests(tempRequests, request, promoStock, nonPromoStock, product, promotion);
-                    if (!proceed) {
-                        allValid = false;
-                        break;
-                    }
-                } else {
-                    // Product does not have promotion
-                    if (requestedQuantity > totalStock) {
-                        System.out.println("[ERROR] 재고가 부족합니다. 구매 가능한 최대 수량은 " + totalStock + "개입니다.");
-                        allValid = false;
-                        break;
-                    }
-
-                    // Process non-promotion purchase
-                    request.setPrice(product.getPrice());
-                    request.setPromotionApplicable(false);
-                    request.setFinalQuantity(requestedQuantity);
-                    tempRequests.add(request);
-                }
-            }
-
-            if (allValid) {
-                // Confirm purchase
-                for (PurchaseRequest request : tempRequests) {
-                    handlePurchaseRequest(products, request);
-                    purchaseRequests.add(request);
-                }
-
-                // 멤버십 할인 적용 여부 묻기
-                int membershipDiscount = applyMembershipDiscount(purchaseRequests);
-
-                // 영수증 출력
-                printReceipt(purchaseRequests, membershipDiscount);
-                break;
-            } else {
-                System.out.println("[ERROR] 잘못된 입력이 있습니다. 다시 입력해 주세요.\n");
+        List<PurchaseRequest> purchaseRequests = new ArrayList<>();
+        boolean purchaseComplete = false;
+        while (!purchaseComplete) {
+            try {
+                executePurchase(products, promotions, purchaseRequests);
+                purchaseComplete = true;
+            } catch (IllegalArgumentException e) {
+                System.out.println(e.getMessage());
             }
         }
     }
 
-    private static boolean processPromotionAndAddRequests(
+    private static void executePurchase(List<Product> products, Map<String, Promotion> promotions, List<PurchaseRequest> purchaseRequests) {
+        String[] itemList = getPurchaseItems();
+        List<PurchaseRequest> tempRequests = parsePurchaseItems(itemList, products, promotions);
+
+        processPurchaseRequests(products, purchaseRequests, tempRequests);
+
+        int membershipDiscount = applyMembershipDiscount(purchaseRequests);
+
+        printReceipt(purchaseRequests, membershipDiscount);
+    }
+
+    private static String[] getPurchaseItems() {
+        System.out.println("구매하실 상품명과 수량을 입력해 주세요. (예: [사이다-2],[감자칩-1])");
+        String items = Console.readLine();
+        return items.split(",");
+    }
+
+    private static void processPurchaseRequests(List<Product> products, List<PurchaseRequest> purchaseRequests, List<PurchaseRequest> tempRequests) {
+        for (PurchaseRequest request : tempRequests) {
+            handlePurchaseRequest(products, request);
+            purchaseRequests.add(request);
+        }
+    }
+
+    private static List<PurchaseRequest> parsePurchaseItems(String[] itemList, List<Product> products, Map<String, Promotion> promotions) {
+        List<PurchaseRequest> tempRequests = new ArrayList<>();
+        for (String item : itemList) {
+            PurchaseRequest request = parsePurchaseItem(item);
+            processPurchaseItem(request, products, promotions, tempRequests);
+        }
+        return tempRequests;
+    }
+
+    private static void processPurchaseItem(PurchaseRequest request, List<Product> products, Map<String, Promotion> promotions, List<PurchaseRequest> tempRequests) {
+        List<Product> matchedProducts = findProductsByName(products, request.getProductName());
+        if (matchedProducts.isEmpty()) {
+            throw new IllegalArgumentException("[ERROR] 해당 상품을 찾을 수 없습니다: " + request.getProductName());
+        }
+
+        int requestedQuantity = request.getQuantity();
+        int totalStock = getTotalStock(matchedProducts);
+
+        if (requestedQuantity > totalStock) {
+            throw new IllegalArgumentException("[ERROR] 입력한 수량(" + requestedQuantity + "개)이 총 재고(" + totalStock + "개)를 초과합니다. 구매 가능한 최대 수량은 " + totalStock + "개입니다.");
+        }
+
+        Product product = matchedProducts.get(0);
+        Promotion promotion = promotions.get(product.getPromotion());
+
+        if (promotion == null) {
+            setNonPromotionalRequest(request, product, requestedQuantity);
+            tempRequests.add(request);
+        } else {
+            int promoStock = product.getPromotionStock();
+            int nonPromoStock = totalStock - promoStock;
+            processPromotionAndAddRequests(tempRequests, request, promoStock, nonPromoStock, product, promotion);
+        }
+    }
+
+    private static int getTotalStock(List<Product> matchedProducts) {
+        return matchedProducts.stream().mapToInt(Product::getStock).sum();
+    }
+
+    private static void setNonPromotionalRequest(PurchaseRequest request, Product product, int requestedQuantity) {
+        request.setPrice(product.getPrice());
+        request.setPromotionApplicable(false);
+        request.setFinalQuantity(requestedQuantity);
+    }
+
+    private static void processPromotionAndAddRequests(
             List<PurchaseRequest> tempRequests,
             PurchaseRequest request,
             int promoStock,
@@ -208,45 +219,27 @@ public class Application {
             Promotion promotion
     ) {
         int requestedQuantity = request.getQuantity();
-        int totalStock = promoStock + nonPromoStock;
-
-        // Calculate how many promotions can be applied
         int promotionTotal = promotion.getBuy() + promotion.getGet();
         int maxPromotionCycles = promoStock / promotionTotal;
-
         int promoApplicableQuantity = Math.min(requestedQuantity, maxPromotionCycles * promotionTotal);
         int nonPromoApplicableQuantity = requestedQuantity - promoApplicableQuantity;
 
-        // If there is remaining promo stock but not enough to form a full promotion cycle
-        int remainingPromoStock = promoStock - promoApplicableQuantity;
-        int promoRemainder = remainingPromoStock;
-
         if (promoApplicableQuantity < requestedQuantity) {
-            // There are quantities that cannot be applied with promotion
             int nonPromotionalQuantity = requestedQuantity - promoApplicableQuantity;
-
-            System.out.println("현재 " + product.getName() + " " + nonPromotionalQuantity + "개는 프로모션 할인이 적용되지 않습니다. 그래도 구매하시겠습니까? (Y/N)");
-            if (!getUserConfirmation()) {
-                return false;
-            }
+            handleNonPromoQuantity(nonPromotionalQuantity, product.getName());
         }
 
-        // Check if user wants to add more items to complete a promotion cycle
         int promoCycleRemainder = promoApplicableQuantity % promotionTotal;
         if (promoCycleRemainder >= promotion.getBuy() && promoCycleRemainder < promotionTotal) {
-            int additionalNeeded = promotionTotal - promoCycleRemainder;
-            System.out.println("현재 " + product.getName() + "은(는) " + promotion.getGet() + "개를 무료로 더 받을 수 있습니다. 추가하시겠습니까? (Y/N)");
-            if (getUserConfirmation()) {
-                if (promoApplicableQuantity + additionalNeeded <= promoStock) {
-                    promoApplicableQuantity += additionalNeeded;
-                } else {
-                    int nonPromoQuantity = requestedQuantity - promoApplicableQuantity;
-                    System.out.println("현재 " + product.getName() + " " + nonPromoQuantity + "개는 프로모션 할인이 적용되지 않습니다. 그래도 구매하시겠습니까? (Y/N)");
-                    if (!getUserConfirmation()) {
-                        return false;
-                    }
-                }
-            }
+            promoApplicableQuantity = adjustPromoQuantityForAdditionalPurchase(
+                    promoApplicableQuantity,
+                    promoCycleRemainder,
+                    promotionTotal,
+                    promoStock,
+                    requestedQuantity,
+                    product.getName(),
+                    promotion
+            );
         }
 
         request.setPrice(product.getPrice());
@@ -260,19 +253,50 @@ public class Application {
         request.setFinalQuantity(promoApplicableQuantity + nonPromoApplicableQuantity);
 
         tempRequests.add(request);
-        return true;
+    }
+
+    private static int adjustPromoQuantityForAdditionalPurchase(
+            int promoApplicableQuantity,
+            int promoCycleRemainder,
+            int promotionTotal,
+            int promoStock,
+            int requestedQuantity,
+            String productName,
+            Promotion promotion
+    ) {
+        int additionalNeeded = promotionTotal - promoCycleRemainder;
+        System.out.println("현재 " + productName + "은(는) " + promotion.getGet() + "개를 무료로 더 받을 수 있습니다. 추가하시겠습니까? (Y/N)");
+        boolean userWantsAdditional = getUserConfirmation();
+        if (!userWantsAdditional) {
+            return promoApplicableQuantity;
+        }
+        if (promoApplicableQuantity + additionalNeeded <= promoStock) {
+            promoApplicableQuantity += additionalNeeded;
+            return promoApplicableQuantity;
+        }
+        int nonPromoQuantity = requestedQuantity - promoApplicableQuantity;
+        handleNonPromoQuantity(nonPromoQuantity, productName);
+        return promoApplicableQuantity;
+    }
+
+    private static void handleNonPromoQuantity(int nonPromoQuantity, String productName) {
+        System.out.println("현재 " + productName + " " + nonPromoQuantity + "개는 프로모션 할인이 적용되지 않습니다. 그래도 구매하시겠습니까? (Y/N)");
+        boolean proceed = getUserConfirmation();
+        if (!proceed) {
+            throw new IllegalArgumentException("[ERROR] 구매가 취소되었습니다.");
+        }
     }
 
     private static boolean getUserConfirmation() {
         while (true) {
             String input = Console.readLine().trim().toUpperCase();
-            if (input.equals("Y")) {
+            if ("Y".equals(input)) {
                 return true;
-            } else if (input.equals("N")) {
-                return false;
-            } else {
-                System.out.println("[ERROR] 잘못된 입력입니다. Y 또는 N을 입력하세요.");
             }
+            if ("N".equals(input)) {
+                return false;
+            }
+            System.out.println("[ERROR] 잘못된 입력입니다. Y 또는 N을 입력하세요.");
         }
     }
 
@@ -282,11 +306,14 @@ public class Application {
         int totalQuantity = request.getFinalQuantity() + request.getGiftedQuantity();
 
         for (Product product : products) {
-            if (product.getName().equals(productName) && product.getStock() > 0) {
-                int reducible = Math.min(totalQuantity, product.getStock());
-                product.reduceStock(reducible);
-                totalQuantity -= reducible;
-                if (totalQuantity == 0) break;
+            if (!product.getName().equals(productName) || product.getStock() <= 0) {
+                continue;
+            }
+            int reducible = Math.min(totalQuantity, product.getStock());
+            product.reduceStock(reducible);
+            totalQuantity -= reducible;
+            if (totalQuantity == 0) {
+                break;
             }
         }
     }
@@ -299,11 +326,11 @@ public class Application {
             }
         }
 
-        // 프로모션이 있는 제품을 우선적으로 처리하기 위해 정렬합니다.
         matchedProducts.sort((p1, p2) -> {
             if (p1.getPromotion() == null && p2.getPromotion() != null) {
                 return 1;
-            } else if (p1.getPromotion() != null && p2.getPromotion() == null) {
+            }
+            if (p1.getPromotion() != null && p2.getPromotion() == null) {
                 return -1;
             }
             return 0;
@@ -322,24 +349,22 @@ public class Application {
         int totalDiscount = 0;
 
         for (PurchaseRequest request : purchaseRequests) {
-            if (request.getFinalQuantity() <= 0) continue; // 구매가 취소된 경우 건너뜁니다.
+            if (request.getFinalQuantity() <= 0) {
+                continue;
+            }
             int cost = request.getFinalQuantity() * request.getPrice();
-            totalItems += request.getFinalQuantity(); // 증정된 상품은 포함하지 않습니다.
+            totalItems += request.getFinalQuantity();
             totalAmount += cost;
             System.out.println(request.getProductName() + "\t\t" + request.getFinalQuantity() + "\t" + numberFormat.format(cost));
         }
 
-        // 증정된 상품 출력
         System.out.println("=============증\t정===============");
-        int totalGiftedItems = 0;
         for (PurchaseRequest request : purchaseRequests) {
             if (request.getGiftedQuantity() > 0) {
-                totalGiftedItems += request.getGiftedQuantity();
                 System.out.println(request.getProductName() + "\t\t" + request.getGiftedQuantity());
             }
         }
 
-        // 행사할인 계산 (증정된 상품들의 가격 합계)
         for (PurchaseRequest request : purchaseRequests) {
             if (request.getGiftedQuantity() > 0) {
                 int discount = request.getGiftedQuantity() * request.getPrice();
@@ -359,16 +384,16 @@ public class Application {
     }
 
     public static boolean askForMoreShopping() {
+        System.out.println("감사합니다. 구매하고 싶은 다른 상품이 있나요? (Y/N)");
         while (true) {
-            System.out.println("감사합니다. 구매하고 싶은 다른 상품이 있나요? (Y/N)");
             String input = Console.readLine().trim().toUpperCase();
-            if (input.equals("Y")) {
+            if ("Y".equals(input)) {
                 return true;
-            } else if (input.equals("N")) {
-                return false;
-            } else {
-                System.out.println("[ERROR] 잘못된 입력입니다. 다시 입력해 주세요.");
             }
+            if ("N".equals(input)) {
+                return false;
+            }
+            System.out.println("[ERROR] 잘못된 입력입니다. 다시 입력해 주세요.");
         }
     }
 
@@ -394,36 +419,43 @@ public class Application {
             throw new IllegalArgumentException("[ERROR] 수량은 1 이상이어야 합니다: " + quantity);
         }
 
-        return new PurchaseRequest(productName, quantity, 0); // 가격은 추후에 설정
+        return new PurchaseRequest(productName, quantity, 0);
     }
 
     public static int applyMembershipDiscount(List<PurchaseRequest> purchaseRequests) {
         System.out.println("멤버십 할인을 받으시겠습니까? (Y/N)");
-        int membershipDiscount = 0;
-        while (true) {
-            String input = Console.readLine().trim().toUpperCase();
-            if (input.equals("Y")) {
-                // 멤버십 할인 적용
-                int totalNonPromoPrice = 0;
-                for (PurchaseRequest request : purchaseRequests) {
-                    if (!request.isPromotionApplicable()) {
-                        totalNonPromoPrice += request.getFinalQuantity() * request.getPrice();
-                    }
-                }
-                membershipDiscount = (int) (totalNonPromoPrice * 0.3);
-                if (membershipDiscount > 8000) {
-                    membershipDiscount = 8000;
-                }
-                break;
-            } else if (input.equals("N")) {
-                // 멤버십 할인 미적용
-                membershipDiscount = 0;
-                break;
-            } else {
-                System.out.println("[ERROR] 잘못된 입력입니다. 다시 입력해 주세요.");
-            }
+        String input = getValidYesNoInput();
+
+        if ("N".equals(input)) {
+            return 0;
+        }
+
+        int totalNonPromoPrice = calculateTotalNonPromoPrice(purchaseRequests);
+        int membershipDiscount = (int) (totalNonPromoPrice * 0.3);
+        if (membershipDiscount > 8000) {
+            membershipDiscount = 8000;
         }
         return membershipDiscount;
+    }
+
+    private static String getValidYesNoInput() {
+        String input = Console.readLine().trim().toUpperCase();
+        while (!"Y".equals(input) && !"N".equals(input)) {
+            System.out.println("[ERROR] 잘못된 입력입니다. 다시 입력해 주세요.");
+            input = Console.readLine().trim().toUpperCase();
+        }
+        return input;
+    }
+
+    private static int calculateTotalNonPromoPrice(List<PurchaseRequest> purchaseRequests) {
+        int totalNonPromoPrice = 0;
+        for (PurchaseRequest request : purchaseRequests) {
+            if (request.isPromotionApplicable()) {
+                continue;
+            }
+            totalNonPromoPrice += request.getFinalQuantity() * request.getPrice();
+        }
+        return totalNonPromoPrice;
     }
 }
 
@@ -432,14 +464,17 @@ class Product {
     private final int price;
     private int stock;
     private final String promotion;
-    private int promotionStock; // 프로모션 재고
+    private int promotionStock;
 
     public Product(String name, int price, int stock, String promotion) {
         this.name = name;
         this.price = price;
         this.stock = stock;
         this.promotion = promotion;
-        this.promotionStock = promotion != null ? stock : 0; // 프로모션이 있는 경우 전체 재고를 프로모션 재고로 설정
+        this.promotionStock = 0;
+        if (promotion != null) {
+            this.promotionStock = stock;
+        }
     }
 
     public String getName() {
@@ -463,24 +498,28 @@ class Product {
     }
 
     public void reduceStock(int quantity) {
-        if (stock >= quantity) {
-            stock -= quantity;
-            if (promotion != null) {
-                int promoReducible = Math.min(quantity, promotionStock);
-                promotionStock -= promoReducible;
-            }
-        } else {
+        if (stock < quantity) {
             throw new IllegalArgumentException(name + "의 재고가 부족합니다.");
+        }
+        stock -= quantity;
+        if (promotion != null) {
+            int promoReducible = Math.min(quantity, promotionStock);
+            promotionStock -= promoReducible;
         }
     }
 
     public void display() {
         NumberFormat numberFormat = NumberFormat.getInstance();
-        if (stock == 0) {
-            System.out.println("- " + name + " " + numberFormat.format(price) + "원 재고 없음" + (promotion != null ? " " + promotion : ""));
-        } else {
-            System.out.println("- " + name + " " + numberFormat.format(price) + "원 " + stock + "개" + (promotion != null ? " " + promotion : ""));
+        String promoString = "";
+        if (promotion != null) {
+            promoString = " " + promotion;
         }
+
+        if (stock == 0) {
+            System.out.println("- " + name + " " + numberFormat.format(price) + "원 재고 없음" + promoString);
+            return;
+        }
+        System.out.println("- " + name + " " + numberFormat.format(price) + "원 " + stock + "개" + promoString);
     }
 }
 
@@ -510,10 +549,10 @@ class Promotion {
 
 class PurchaseRequest {
     private final String productName;
-    private int quantity; // 구매할 수량
+    private int quantity;
     private int price;
-    private int giftedQuantity; // 증정된 개수를 저장
-    private int finalQuantity; // 최종 구매 수량 (프로모션 적용 후)
+    private int giftedQuantity;
+    private int finalQuantity;
 
     private boolean isPromotionApplicable;
     private Promotion promotion;
@@ -526,16 +565,6 @@ class PurchaseRequest {
         this.finalQuantity = quantity;
         this.isPromotionApplicable = false;
         this.promotion = null;
-    }
-
-    public PurchaseRequest(String productName, int quantity, int price, boolean isPromotionApplicable, Promotion promotion) {
-        this.productName = productName;
-        this.quantity = quantity;
-        this.price = price;
-        this.giftedQuantity = 0;
-        this.finalQuantity = quantity;
-        this.isPromotionApplicable = isPromotionApplicable;
-        this.promotion = promotion;
     }
 
     public String getProductName() {
@@ -576,10 +605,6 @@ class PurchaseRequest {
 
     public void setPromotionApplicable(boolean promotionApplicable) {
         isPromotionApplicable = promotionApplicable;
-    }
-
-    public Promotion getPromotion() {
-        return promotion;
     }
 
     public void setPromotion(Promotion promotion) {
