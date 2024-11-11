@@ -91,7 +91,7 @@ public class PurchaseService {
         int totalStock = getTotalStock(matchedProducts);
 
         if (requestedQuantity > totalStock) {
-            throw new IllegalArgumentException("[ERROR] 입력한 수량(" + requestedQuantity + "개)이 총 재고(" + totalStock + "개)를 초과합니다. 구매 가능한 최대 수량은 " + totalStock + "개입니다.");
+            throw new IllegalArgumentException("[ERROR] 재고 수량을 초과하여 구매할 수 없습니다. 다시 입력해 주세요.");
         }
 
         Product product = matchedProducts.get(0);
