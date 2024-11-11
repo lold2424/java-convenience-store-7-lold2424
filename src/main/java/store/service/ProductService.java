@@ -2,6 +2,7 @@ package store.service;
 
 import store.domain.Product;
 import store.domain.Promotion;
+import store.message.ErrorMessage;
 
 import java.io.BufferedReader;
 import java.io.IOException;
@@ -66,19 +67,19 @@ public class ProductService {
                 getClass().getClassLoader().getResourceAsStream(filename)))) {
 
             if (reader == null) {
-                throw new IllegalArgumentException("[ERROR] 파일을 찾을 수 없습니다.: " + filename);
+                throw new IllegalArgumentException(ErrorMessage.FILE_NOT_FOUND.getMessage() + filename);
             }
             validateHeader(reader.readLine(), expectedHeader, filename);
             return readLines(reader);
 
         } catch (IOException e) {
-            throw new IllegalArgumentException("[ERROR] 파일을 읽을 수 없습니다.: " + filename);
+            throw new IllegalArgumentException(ErrorMessage.FILE_READ_ERROR.getMessage() + filename);
         }
     }
 
     private void validateHeader(String headerLine, String expectedHeader, String filename) {
         if (headerLine == null || !headerLine.trim().equals(expectedHeader)) {
-            throw new IllegalArgumentException("[ERROR] 파일 헤더가 예상과 다릅니다. 파일명: " + filename);
+            throw new IllegalArgumentException(ErrorMessage.INVALID_FILE_HEADER.getMessage() + filename);
         }
     }
 

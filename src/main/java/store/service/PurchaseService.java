@@ -3,6 +3,7 @@ package store.service;
 import store.domain.Product;
 import store.domain.Promotion;
 import store.domain.PurchaseRequest;
+import store.message.ErrorMessage;
 import store.view.View;
 
 import java.text.NumberFormat;
@@ -58,12 +59,12 @@ public class PurchaseService {
 
     private PurchaseRequest parsePurchaseItem(String item) {
         if (!item.matches("\\[.+-\\d+\\]")) {
-            throw new IllegalArgumentException("[ERROR] 올바르지 않은 형식으로 입력했습니다: " + item);
+            throw new IllegalArgumentException(ErrorMessage.INVALID_INPUT_FORMAT.getMessage(item));
         }
 
         String[] splitItem = item.replaceAll("[\\[\\]]", "").split("-");
         if (splitItem.length != 2) {
-            throw new IllegalArgumentException("[ERROR] 올바르지 않은 형식으로 입력했습니다: " + item);
+            throw new IllegalArgumentException(ErrorMessage.INVALID_INPUT_FORMAT.getMessage(item));
         }
 
         String productName = splitItem[0].trim();
@@ -71,11 +72,11 @@ public class PurchaseService {
         try {
             quantity = Integer.parseInt(splitItem[1].trim());
         } catch (NumberFormatException e) {
-            throw new IllegalArgumentException("[ERROR] 수량은 숫자여야 합니다: " + splitItem[1].trim());
+            throw new IllegalArgumentException(ErrorMessage.QUANTITY_NOT_NUMBER.getMessage(splitItem[1].trim()));
         }
 
         if (quantity <= 0) {
-            throw new IllegalArgumentException("[ERROR] 수량은 1 이상이어야 합니다: " + quantity);
+            throw new IllegalArgumentException(ErrorMessage.QUANTITY_LESS_THAN_ONE.getMessage(quantity));
         }
 
         return new PurchaseRequest(productName, quantity, 0);
@@ -84,14 +85,14 @@ public class PurchaseService {
     private void processPurchaseItem(PurchaseRequest request, List<Product> products, Map<String, Promotion> promotions, List<PurchaseRequest> tempRequests) {
         List<Product> matchedProducts = findProductsByName(products, request.getProductName());
         if (matchedProducts.isEmpty()) {
-            throw new IllegalArgumentException("[ERROR] 해당 상품을 찾을 수 없습니다: " + request.getProductName());
+            throw new IllegalArgumentException(ErrorMessage.PRODUCT_NOT_FOUND.getMessage(request.getProductName()));
         }
 
         int requestedQuantity = request.getQuantity();
         int totalStock = getTotalStock(matchedProducts);
 
         if (requestedQuantity > totalStock) {
-            throw new IllegalArgumentException("[ERROR] 재고 수량을 초과하여 구매할 수 없습니다. 다시 입력해 주세요.");
+            throw new IllegalArgumentException(ErrorMessage.STOCK_EXCEEDED.getMessage(requestedQuantity, totalStock, totalStock));
         }
 
         Product product = matchedProducts.get(0);
